@@ -4,7 +4,7 @@
 	<head>
 		<meta charset="utf-8">
 
-    <title>Reveal.js Presentation</title>
+    <title>Phantom Types</title>
 
 		<meta name="description" content="A framework for easily creating beautiful presentations using HTML">
 		<meta name="author" content="Hakim El Hattab">
@@ -145,6 +145,63 @@ Better Rocket Software
 ![Exceptions?](elon-likes.jpg)
 
 Elon likes the type safety.
+
+    </script></section><section data-markdown><script type="text/template">
+# Yes, but can I generate JSON with it?
+
+You can!
+    </script></section><section data-markdown><script type="text/template">
+JSON Parse State as a type (its recursive)
+
+<pre><code class="scala">sealed trait JState
+trait Start extends JState 
+trait Complete extends JState
+trait OpenArray[E &lt;: JState] extends JState
+trait OpenObject[E &lt;: JState] extends JState
+</code></pre>
+
+
+    </script></section><section data-markdown><script type="text/template">
+Typesafe JSON Incremental JSON Builder
+
+<pre><code class="scala">case class JBuilder[S &lt;: JState]( buffer: B, delimit: B =&gt; B) {
+  def flip(b: B = empty) = (buffer, JBuilder[S](b, delimit))
+  def fullText(implicit bufRep: JSONRep[B]) = bufRep fullText buffer
+}
+
+implicit class ArrayOps[E &lt;: JState](b: JBuilder[OpenArray[E]]) {
+  def | [T:Element] (t: T) = shift(Element[T] encode t)
+
+  ... 
+}
+
+implicit class ObjectOps[E &lt;: JState]( b: JBuilder[OpenObject[E]]) {
+  def | [T:Element](f: (String, T)) = shift(f._1, Element[T] encode f._2)
+
+  ...
+}</code></pre>
+
+    </script></section><section data-markdown><script type="text/template">
+Incremental JSON Generation
+
+<pre><code class="scala">object json_generator {
+  import au.com.langdale.json.DSL._
+  
+  val p1 = JBuilder.start | array | 30.0          //&gt; p1  : au.com.langdale.json.DSL.JBuilder[au.com.langdale.json.DSL.OpenArray[a
+                                                  //| u.com.langdale.json.DSL.Complete]] = JBuilder(List(30.0, [),&lt;function1&gt;)
+
+	val p2 = p1 | obj | &quot;name&quot; -&gt; &quot;joe&quot;       //&gt; p2  : au.com.langdale.json.DSL.JBuilder[au.com.langdale.json.DSL.OpenObject[
+                                                  //| au.com.langdale.json.DSL.OpenArray[au.com.langdale.json.DSL.Complete]]] = JB
+                                                  //| uilder(List(&quot;joe&quot;, :, &quot;name&quot;, {, ,, 30.0, [),&lt;function1&gt;)
+	// val p3 = p2 | &quot;element&quot;
+	
+	p2.fullText                               //&gt; res0: CharSequence = [30.0,{&quot;name&quot;:&quot;joe&quot;
+	
+	val p4 = p2 | end | end                   //&gt; p4  : au.com.langdale.json.DSL.JBuilder[au.com.langdale.json.DSL.Complete] =
+                                                  //|  JBuilder(List(], }, &quot;joe&quot;, :, &quot;name&quot;, {, ,, 30.0, [),&lt;function1&gt;)
+	p4.fullText                               //&gt; res1: CharSequence = [30.0,{&quot;name&quot;:&quot;joe&quot;}]
+}</code></pre>
+
 
     </script></section>
 			</div>
